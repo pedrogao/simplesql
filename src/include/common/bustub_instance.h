@@ -41,7 +41,7 @@ class BustubInstance {  // db 实例
     lock_manager_ = new LockManager();                                           // 锁管理器
     transaction_manager_ = new TransactionManager(lock_manager_, log_manager_);  // 事务管理器
 
-    // checkpoints  检查点管理器，防止 crash 恢复
+    // checkpoints 快照管理器，防止 crash 恢复
     checkpoint_manager_ = new CheckpointManager(transaction_manager_, log_manager_, buffer_pool_manager_);
   }
 

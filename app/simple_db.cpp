@@ -1,13 +1,22 @@
 #include <chrono>
 #include <random>
 
+#include "catalog/catalog.h"
 #include "common/bustub_instance.h"
 #include "common/config.h"
 #include "common/logger.h"
+#include "execution/execution_engine.h"
+#include "execution/executor_context.h"
+#include "execution/expressions/abstract_expression.h"
+#include "execution/expressions/column_value_expression.h"
+#include "execution/expressions/comparison_expression.h"
+#include "execution/expressions/constant_value_expression.h"
+#include "execution/plans/seq_scan_plan.h"
 #include "storage/table/table_heap.h"
 
 using namespace bustub;
 
+// 生成记录
 Tuple ConstructTuple(Schema *schema) {
   std::vector<Value> values;
   Value v(TypeId::INVALID);
@@ -59,30 +68,63 @@ Tuple ConstructTuple(Schema *schema) {
 }
 
 int main(int argc, char **argv) {
+  enable_logging = true;  // 开启日志
   BustubInstance db("test.db");
-
+  Catalog catalog(db.buffer_pool_manager_, db.lock_manager_, db.log_manager_);
+  // sql => plan => execute => transaction => result
+  // 1. 开启事务
   Transaction *txn = db.transaction_manager_->Begin();
-  TableHeap test_table(db.buffer_pool_manager_, db.lock_manager_, db.log_manager_, txn);
-  page_id_t first_page_id = test_table.GetFirstPageId();
-  LOG_INFO("first page id: %d", first_page_id);
-
+  // 2. 新建表
   RID rid;
   RID rid1;
-  Column col1{"a", TypeId::VARCHAR, 20};
-  Column col2{"b", TypeId::SMALLINT};
+  Column col1{"colA", TypeId::INTEGER};
+  Column col2{"colB", TypeId::SMALLINT};
   std::vector<Column> cols{col1, col2};
   Schema schema{cols};
+  // catalog
+  auto table_metadata = catalog.CreateTable(txn, "pedro", schema);
+  TableHeap *test_table = table_metadata->table_.get();
+  // 3. 插入记录
   const Tuple tuple = ConstructTuple(&schema);
   const Tuple tuple1 = ConstructTuple(&schema);
-
-  auto val_1 = tuple.GetValue(&schema, 1);
-  auto val_0 = tuple.GetValue(&schema, 0);
-  auto val1_1 = tuple1.GetValue(&schema, 1);
-  auto val1_0 = tuple1.GetValue(&schema, 0);
-
-  test_table.InsertTuple(tuple, &rid, txn);
-  test_table.InsertTuple(tuple1, &rid1, txn);
-
+  // insert
+  std::cout << "insert tuple: " << std::endl;
+  std::cout << tuple.GetValue(&schema, schema.GetColIdx("colA")).GetAs<int32_t>() << ", "
+            << tuple.GetValue(&schema, schema.GetColIdx("colB")).GetAs<int32_t>() << std::endl;
+  std::cout << tuple1.GetValue(&schema, schema.GetColIdx("colA")).GetAs<int32_t>() << ", "
+            << tuple1.GetValue(&schema, schema.GetColIdx("colB")).GetAs<int32_t>() << std::endl;
+  test_table->InsertTuple(tuple, &rid, txn);
+  test_table->InsertTuple(tuple1, &rid1, txn);
+  // 4. 提交事务
   db.transaction_manager_->Commit(txn);
+
+  // 5. 查询
+  Tuple tuple3;
+  Transaction *txn1 = db.transaction_manager_->Begin();
+  ExecutorContext exec_ctx(txn1, &catalog, db.buffer_pool_manager_, db.transaction_manager_, db.lock_manager_);
+  // 6. 构造 sql
+  // auto table_metadata = exec_ctx.GetCatalog()->GetTable("pedro");
+  ColumnValueExpression expA(0, 0, TypeId::INTEGER);
+  ColumnValueExpression expB(1, 1, TypeId::SMALLINT);
+  ConstantValueExpression const5(ValueFactory::GetIntegerValue(9));
+  std::vector<Column> out_cols{{"colA", expA.GetReturnType(), &expA}, {"colB", expB.GetReturnType(), &expB}};
+  Schema out_schema(out_cols);
+  ComparisonExpression predicate(&expB, &const5, ComparisonType::LessThan);
+  SeqScanPlanNode plan{&out_schema, &predicate, table_metadata->oid_};
+
+  // 7. 执行 sql
+  std::vector<Tuple> result_set;
+  ExecutionEngine execution_engine(db.buffer_pool_manager_, db.transaction_manager_, &catalog);
+  execution_engine.Execute(&plan, &result_set, txn1, &exec_ctx);
+
+  // 8. print
+  std::cout << "ColA, ColB" << std::endl;
+  for (const auto &tuple : result_set) {
+    std::cout << tuple.GetValue(&out_schema, out_schema.GetColIdx("colA")).GetAs<int32_t>() << ", "
+              << tuple.GetValue(&out_schema, out_schema.GetColIdx("colB")).GetAs<int32_t>() << std::endl;
+  }
+
+  db.transaction_manager_->Commit(txn1);
+
   return 0;
 }

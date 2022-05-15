@@ -67,14 +67,15 @@ bool SeqScanExecutor::Next(Tuple *tuple, RID *rid) {
     default:
       break;
   }
-
   // 一个 Tuple 是一条记录，values 是字段值，schema 是字段名称
   std::vector<Value> values;
+
   std::transform(plan_->OutputSchema()->GetColumns().begin(), plan_->OutputSchema()->GetColumns().end(),
                  std::back_inserter(values), [&tup, &table_metadata_ = table_metadata_](const Column &col) {
                    // Column 是数据列，即字段的定义，调用 Evaluate 获取列数据
                    return col.GetExpr()->Evaluate(&tup, &(table_metadata_->schema_));
                  });
+
   // 赋值
   *tuple = Tuple{values, plan_->OutputSchema()};
   *rid = tup.GetRid();

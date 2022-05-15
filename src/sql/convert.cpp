@@ -23,13 +23,14 @@ bool Convertor::Parse(const std::string &raw_query) {
 
   LOG_INFO("parse sql: %s", raw_query.c_str());
   hsql::SQLParser::parse(raw_query, &result_);
-  if (!result_.isValid()) {
-    return false;
-  }
-
-  return true;
+  return result_.isValid();
 }
 
 hsql::SQLParserResult &Convertor::GetResult() { return result_; }
+
+AbstractPlanNode *Convertor::Do() {
+  // todo
+  return plan_.get();
+}
 
 }  // namespace bustub
