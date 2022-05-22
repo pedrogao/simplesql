@@ -9,7 +9,14 @@
 #include "common/logger.h"
 #include "execution/execution_engine.h"
 #include "execution/executor_context.h"
+#include "execution/expressions/abstract_expression.h"
+#include "execution/expressions/column_value_expression.h"
+#include "execution/expressions/comparison_expression.h"
+#include "execution/expressions/constant_value_expression.h"
+#include "execution/plans/delete_plan.h"
 #include "execution/plans/insert_plan.h"
+#include "execution/plans/seq_scan_plan.h"
+#include "execution/plans/update_plan.h"
 #include "tuple_util.h"
 #include "util/sqlhelper.h"
 
@@ -95,7 +102,30 @@ int main(int argc, char *argv[]) {
         break;
       case hsql::kStmtSelect: {
         auto *select_statement = dynamic_cast<hsql::SelectStatement *>(stmt);
-        std::cout << select_statement->fromTable->getName() << std::endl;
+        std::cout << "select from: " << select_statement->fromTable->getName() << std::endl;
+        auto table_meta = db_instance.GetCatalog()->GetTable(select_statement->fromTable->getName());
+        std::vector<Column> cols;
+        for (const auto expr : *select_statement->selectList) {
+          std::cout << "expr: " << expr->isLiteral() << std::endl;
+          std::cout << "expr name: " << expr->name << std::endl;
+          Column col{std::string(expr->getName()), TypeId::INTEGER};
+          cols.push_back(col);
+          std::cout << "column def : " << col.ToString() << std::endl;
+        }
+        // TODO where
+        // select_statement->whereClause
+        ColumnValueExpression expB(1, 1, TypeId::SMALLINT);
+        ConstantValueExpression const5(ValueFactory::GetIntegerValue(9));
+        ComparisonExpression predicate(&expB, &const5, ComparisonType::LessThan);
+        Schema schema{cols};
+        SeqScanPlanNode plan{&schema, &predicate, table_meta->oid_};
+        ExecutorContext exec_ctx(txn, db_instance.GetCatalog(), db_instance.GetDB()->buffer_pool_manager_,
+                                 db_instance.GetDB()->transaction_manager_, db_instance.GetDB()->lock_manager_);
+        ExecutionEngine execution_engine(db_instance.GetDB()->buffer_pool_manager_,
+                                         db_instance.GetDB()->transaction_manager_, db_instance.GetCatalog());
+        std::vector<Tuple> result_set;
+        auto ok = execution_engine.Execute(&plan, &result_set, txn, &exec_ctx);
+        std::cout << "result: " << ok << " size: " << result_set.size() << std::endl;
         break;
       }
       case hsql::kStmtImport:
@@ -131,12 +161,47 @@ int main(int argc, char *argv[]) {
         std::cout << "result: " << ok << std::endl;
         break;
       }
-      case hsql::kStmtUpdate:
-        std::cout << "update statement not support" << std::endl;
+      case hsql::kStmtUpdate: {
+        auto *update_stmt = dynamic_cast<hsql::DeleteStatement *>(stmt);
+        std::cout << "table name: " << update_stmt->tableName << std::endl;
+        auto table_meta = db_instance.GetCatalog()->GetTable(update_stmt->tableName);
+        // TODO where
+        ColumnValueExpression expB(1, 1, TypeId::SMALLINT);
+        ConstantValueExpression const5(ValueFactory::GetIntegerValue(9));
+        ComparisonExpression predicate(&expB, &const5, ComparisonType::LessThan);
+        SeqScanPlanNode child_plan{&table_meta->schema_, &predicate, table_meta->oid_};
+        std::unordered_map<uint32_t, UpdateInfo> update_attrs;
+        update_attrs.emplace(0, UpdateInfo{UpdateType::Set, 1});
+        UpdatePlanNode plan{&child_plan, table_meta->oid_, update_attrs};
+        ExecutorContext exec_ctx(txn, db_instance.GetCatalog(), db_instance.GetDB()->buffer_pool_manager_,
+                                 db_instance.GetDB()->transaction_manager_, db_instance.GetDB()->lock_manager_);
+        ExecutionEngine execution_engine(db_instance.GetDB()->buffer_pool_manager_,
+                                         db_instance.GetDB()->transaction_manager_, db_instance.GetCatalog());
+        auto ok = execution_engine.Execute(&plan, nullptr, txn, &exec_ctx);
+        // execute result
+        std::cout << "result: " << ok << std::endl;
         break;
-      case hsql::kStmtDelete:
-        std::cout << "delete statement not support" << std::endl;
+      }
+      case hsql::kStmtDelete: {
+        auto *delete_stmt = dynamic_cast<hsql::DeleteStatement *>(stmt);
+        std::cout << "table name: " << delete_stmt->tableName << std::endl;
+        auto table_meta = db_instance.GetCatalog()->GetTable(delete_stmt->tableName);
+
+        // TODO where
+        ColumnValueExpression expB(1, 1, TypeId::SMALLINT);
+        ConstantValueExpression const5(ValueFactory::GetIntegerValue(9));
+        ComparisonExpression predicate(&expB, &const5, ComparisonType::LessThan);
+        SeqScanPlanNode child_plan{&table_meta->schema_, &predicate, table_meta->oid_};
+        DeletePlanNode plan{&child_plan, table_meta->oid_};
+        ExecutorContext exec_ctx(txn, db_instance.GetCatalog(), db_instance.GetDB()->buffer_pool_manager_,
+                                 db_instance.GetDB()->transaction_manager_, db_instance.GetDB()->lock_manager_);
+        ExecutionEngine execution_engine(db_instance.GetDB()->buffer_pool_manager_,
+                                         db_instance.GetDB()->transaction_manager_, db_instance.GetCatalog());
+        auto ok = execution_engine.Execute(&plan, nullptr, txn, &exec_ctx);
+        // execute result
+        std::cout << "result: " << ok << std::endl;
         break;
+      }
       case hsql::kStmtCreate: {
         auto *create_stmt = dynamic_cast<hsql::CreateStatement *>(stmt);
         std::cout << "table name: " << create_stmt->tableName << std::endl;
@@ -158,9 +223,14 @@ int main(int argc, char *argv[]) {
         db_instance.GetCatalog()->CreateTable(txn, std::string(create_stmt->tableName), schema);
         break;
       }
-      case hsql::kStmtDrop:
+      case hsql::kStmtDrop: {
+        auto *drop_stmt = dynamic_cast<hsql::DropStatement *>(stmt);
+        std::cout << "table name: " << drop_stmt->name << std::endl;
         std::cout << "drop statement not support" << std::endl;
+        // drop table
+        // db_instance.GetCatalog()->CreateTable(txn, std::string(create_stmt->tableName), schema);
         break;
+      }
       case hsql::kStmtPrepare:
         std::cout << "prepare statement not support" << std::endl;
         break;
