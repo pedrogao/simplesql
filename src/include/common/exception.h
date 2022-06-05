@@ -47,6 +47,8 @@ enum class ExceptionType {
   OUT_OF_MEMORY = 9,
   /** Method not implemented. */
   NOT_IMPLEMENTED = 11,
+  /** SQL statement parse error */
+  SQL_STATEMENT_PARSE = 12,
 };
 
 class Exception : public std::runtime_error {
@@ -85,6 +87,8 @@ class Exception : public std::runtime_error {
         return "Out of Memory";
       case ExceptionType::NOT_IMPLEMENTED:
         return "Not implemented";
+      case ExceptionType::SQL_STATEMENT_PARSE:
+        return "SQL statement parse error";
       default:
         return "Unknown";
     }

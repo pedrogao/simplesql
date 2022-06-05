@@ -264,3 +264,4 @@ docs/dev
 *.zip
 third_party/sql-parser
 third_party/workflow
+third_party/spdlog

@@ -34,7 +34,6 @@ bool SeqScanExecutor::Next(Tuple *tuple, RID *rid) {
     tup = *(*table_iterator_);  // 得到当前 tuple
     ++(*table_iterator_);       // 下一个
   } while (plan_->GetPredicate() != nullptr &&
-           // 执行
            !plan_->GetPredicate()->Evaluate(&tup, &(table_metadata_->schema_)).GetAs<bool>());
 
   // 判断事务隔离级别

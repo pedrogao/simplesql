@@ -105,6 +105,7 @@ include_directories(${BUSTUB_SRC_INCLUDE_DIR} ${BUSTUB_TEST_INCLUDE_DIR} ${BUSTU
 include_directories(BEFORE src) # This is needed for gtest.
 include_directories(./third_party/sql-parser/src)
 include_directories(./third_party/workflow/_include)
+include_directories(./third_party/spdlog/include)
 
 # link
 link_directories(/usr/local/lib)
