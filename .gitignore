@@ -265,3 +265,4 @@ docs/dev
 third_party/sql-parser
 third_party/workflow
 third_party/spdlog
+third_party/wfrest

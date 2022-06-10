@@ -21,12 +21,12 @@ cmake .. && make -j 4
 cp libspdlog.a /usr/local/lib
 ```
 
-workflow:
+wfrest:
 
 ```sh
-cd third_party && git clone https://github.com/sogou/workflow
-cd workflow && make
-cp _lib/libworkflow.dylib /usr/local/lib
+cd third_party && git clone https://github.com/wfrest/wfrest
+cd wfrest && make
+make install
 ```
 
 ## startup
